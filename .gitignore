@@ -1,0 +1,12 @@
+__pycache__/
+.ruff_cache/
+.mypy_cache/
+wsl2win/
+.venv/
+.env
+.env_auth
+.flake8
+.pylintrc
+.mypy.ini
+*.log
+*.session

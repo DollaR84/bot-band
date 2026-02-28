@@ -1,0 +1,5 @@
+redis
+pyrogram
+tgcrypto
+pydantic-settings
+openai

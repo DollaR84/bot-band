@@ -1,0 +1,37 @@
+x-default-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  redis:
+    image: redis:alpine
+    env_file: .env
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  bot:
+    <<: *default-logging
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    command: []
+    user: "1000:1000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    volumes:
+      - ./sessions:/app/sessions
+
+volumes:
+  redis_data:
