@@ -2,6 +2,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 wsl2win/
+old/
 sessions/
 .venv/
 .env
@@ -12,4 +13,3 @@ sessions/
 *.log
 *.session
 *.session-journal
-*.old

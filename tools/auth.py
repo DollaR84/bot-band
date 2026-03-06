@@ -2,15 +2,8 @@ import asyncio
 from pathlib import Path
 
 from pyrogram import Client
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-class TelegramConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env_auth", env_prefix="TELEGRAM_")
-
-    api_id: int
-    api_hash: str
-    workdir: str = "./sessions/"
+from config import TelegramConfig
 
 
 async def create_session() -> None:

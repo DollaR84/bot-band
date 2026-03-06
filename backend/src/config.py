@@ -39,6 +39,7 @@ class GroupConfig(BaseSettings):
 class LLMConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LLM_")
 
+    name: str
     base_url: str
     api_key: str
     model: str
@@ -49,8 +50,6 @@ class BehaviorConfig(BaseSettings):
 
     min_delay: int = 5
     max_delay: int = 20
-
-    bot_sessions: list[str] = Field(default_factory=list)
 
 
 class Config(BaseSettings):

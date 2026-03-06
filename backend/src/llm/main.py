@@ -5,15 +5,21 @@ from openai import AsyncOpenAI
 
 from config import Config
 
+from .models import BaseModels
+
 
 class LLMService:
 
     def __init__(self, config: Config):
+        self.model = BaseModels.get(config.llm.name, config.llm)
+
         self.client = AsyncOpenAI(
             base_url=config.llm.base_url,
             api_key=config.llm.api_key,
         )
-        self.model = config.llm.model
+
+    def get_default_answer(self) -> str:
+        return random.choice(["Лоол", "Ахах, згоден", "Мда...", "Ну таке"])
 
     async def generate_reply(self, context: list[dict[str, str]], topic: str, bot_name: str) -> str:
         system_instruction = (
@@ -37,16 +43,19 @@ class LLMService:
             messages.append({"role": role, "content": content})
 
         try:
+            model_name = self.model()
+            print(f"📡 [LLM] Запит до моделі {model_name} для бота {bot_name}...")
             response = await self.client.chat.completions.create(
-                model=self.model,
+                model=model_name,
                 messages=cast(Any, messages),
-                temperature=0.85,
-                presence_penalty=0.6,
-                frequency_penalty=0.5,
-                max_tokens=200,
+                **self.model.params,
             )
 
             reply = response.choices[0].message.content
+            if not reply:
+                print("⚠️ [LLM] Модель повернула порожній контент!")
+                return self.get_default_answer()
+
             reply = reply.strip() if reply else ""
             if reply.startswith(f"{bot_name}:"):
                 reply = reply.replace(f"{bot_name}:", "")
@@ -55,4 +64,4 @@ class LLMService:
             return reply
         except Exception as error:
             print(f"[!] Помилка LLM: {error}")
-            return random.choice(["Лоол", "Ахах, згоден", "Мда...", "Ну таке"])
+            return self.get_default_answer()

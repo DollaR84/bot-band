@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import random
 
 from pyrogram import Client, enums, filters
@@ -7,6 +8,8 @@ from pyrogram.types import Message
 from config import Config
 from context import ContextManager
 from llm import LLMService
+
+from .settings import TelethonSettings
 
 
 class TelegramManager:
@@ -18,16 +21,6 @@ class TelegramManager:
 
         self.clients: list[Client] = []
 
-    def _setup_clients(self) -> None:
-        self.clients = [
-            Client(
-                name=session,
-                api_id=self.config.telegram.api_id,
-                api_hash=self.config.telegram.api_hash,
-                workdir=self.config.telegram.workdir,
-            ) for session in self.config.behavior.bot_sessions
-        ]
-
     def register_handlers(self) -> None:
         for client in self.clients:
             client.on_message(
@@ -38,42 +31,71 @@ class TelegramManager:
                 filters.private & ~filters.me
             )(self.handle_private_message)
 
+    def _setup_clients(self) -> None:
+        telethon = TelethonSettings(self.config.telegram)
+        sessions_path = Path(self.config.telegram.workdir)
+
+        for session_file in sessions_path.glob("*.session"):
+            data = telethon(session_file.stem)
+            if not data:
+                continue
+
+            client = Client(
+                name=session_file.stem,
+                api_id=data.api_id,
+                api_hash=data.api_hash,
+                workdir=self.config.telegram.workdir,
+            )
+            if client:
+                self.clients.append(client)
+
+    async def join_if_needed(self, client: Client, chat_id: int) -> None:
+        try:
+            await client.get_chat_member(chat_id, "me")
+
+        except Exception:
+            try:
+                print(f"📡 [{client.name}] Спроба вступу в чат {chat_id}...")
+                await client.join_chat(chat_id)
+                print(f"✅ [{client.name}] Успішно вступив до чату")
+            except Exception as error:
+                print(f"[{client.name}] Сталася помилка: {error}")
+
     async def start_all(self) -> None:
         self._setup_clients()
         self.register_handlers()
 
-        target_id = self.config.group.target_id
         for client in self.clients:
-            await client.start()
-            client.me = await client.get_me()
-
             try:
-                await client.get_chat(target_id)
+                await client.start()
+                if not client.is_connected:
+                    print(f"❌ [{client.name}] Клієнт не підключений!")
+                    continue
 
-                members_gen = client.get_chat_members(target_id, limit=1)
-                if members_gen is not None:
-                    async for _ in members_gen:
-                        break
-                else:
-                    name = client.me.first_name
-                    print(f"⚠️[{name}] Не вдалося отримати генератор учасників")
+                await asyncio.sleep(1)
+                me = await client.get_me()
+                print(f"🚀 бот {me.first_name} {me.last_name or ''} готовий до роботи!")
 
-                print("Чат успішно знайдено та додано до кешу сесії")
+                chat = await client.get_chat(self.config.group.target_id)
+                print(f"✅ [{client.name}] чат {chat.title} знайдено в кеші.")
+                await self.join_if_needed(client, self.config.group.target_id)
+
             except Exception as error:
-                print(f"Не вдалося знайти чат: {error}")
+                print(f"❌ [{client.name}] Помилка при запуску: {error}")
 
-            await asyncio.sleep(2)
+            delay = random.uniform(self.config.behavior.min_delay, self.config.behavior.max_delay)
+            await asyncio.sleep(delay)
         print(f"Запущено ботів: {len(self.clients)}")
 
     async def stop_all(self) -> None:
         tasks = [client.stop() for client in self.clients if client.is_connected]
         await asyncio.gather(*tasks)
 
-    async def simulate_typing(self, client: Client, chat_id: int) -> None:
+    async def simulate_typing(self, client: Client, chat_id: int, text_lenght: int) -> None:
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
 
-        delay = random.uniform(self.config.behavior.min_delay, self.config.behavior.max_delay)
-        await asyncio.sleep(delay)
+        typing_delay = min(text_lenght * 0.1, 10)
+        await asyncio.sleep(typing_delay)
 
     async def handle_private_message(self, client: Client, message: Message) -> None:
         new_topic = None
@@ -108,24 +130,22 @@ class TelegramManager:
             if client.me and client.me.id == last_id:
                 return
 
-            if random.random() < 0.5:
+            if random.random() < 0.3:
                 target_client = client
 
         if target_client:
             asyncio.create_task(self.process_response(target_client, message, is_reply))
 
     async def process_response(self, client: Client, message: Message, is_reply: bool = False) -> None:
-        await asyncio.sleep(random.uniform(1, 3))
+        delay = random.uniform(self.config.behavior.min_delay, self.config.behavior.max_delay)
+        await asyncio.sleep(delay)
 
         context = await self.db.get_context()
         topic = await self.db.get_topic()
         bot_name = client.me.first_name if client.me else (await client.get_me()).first_name
 
         response_text = await self.llm.generate_reply(context, topic, bot_name)
-        await self.simulate_typing(client, message.chat.id)
-
-        typing_delay = min(len(response_text) * 0.1, 10)
-        await asyncio.sleep(typing_delay)
+        await self.simulate_typing(client, message.chat.id, len(response_text))
 
         if is_reply:
             await message.reply_text(response_text)
