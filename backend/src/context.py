@@ -35,3 +35,6 @@ class ContextManager:
     async def get_last_poster(self) -> Optional[int]:
         value = await self.redis.get(f"last_poster:{self.config.group.target_id}")
         return int(value) if value else None
+
+    async def clear_context(self) -> None:
+        await self.redis.delete(self.context_key)

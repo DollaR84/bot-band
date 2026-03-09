@@ -62,6 +62,7 @@ class TelegramManager:
                 print(f"[{client.name}] Сталася помилка: {error}")
 
     async def start_all(self) -> None:
+        await self.db.clear_context()
         self._setup_clients()
         self.register_handlers()
 
@@ -105,6 +106,7 @@ class TelegramManager:
             return
 
         await self.db.set_topic(new_topic)
+        await self.db.clear_context()
 
         trigger_text = f"Нова тема для обговорення: {new_topic}"
         await client.send_message(self.config.group.target_id, trigger_text)
@@ -130,7 +132,7 @@ class TelegramManager:
             if client.me and client.me.id == last_id:
                 return
 
-            if random.random() < 0.3:
+            if random.random() < 0.2:
                 target_client = client
 
         if target_client:
